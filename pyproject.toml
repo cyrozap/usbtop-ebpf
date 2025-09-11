@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "usbtop"
+version = "0.1.0"
+description = "A top-like tool for monitoring USB traffic."
+requires-python = ">=3.13"
+dependencies = [
+    # Please note that this project requires the Python bcc bindings: https://github.com/iovisor/bcc
+]
+
+[project.scripts]
+usbtop = "usbtop:main"
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy"]
+
+[tool.ruff.lint]
+select = ["ALL"]  # Enable all rules.
+ignore = [
+    "D100",
+    "D103",
+    "D203",
+    "D212",
+    "E501",
+    "T201",  # `print` is used for the TUI.
+]
+
+[tool.mypy]
+strict = true
