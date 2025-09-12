@@ -17,6 +17,7 @@
 
 import argparse
 import time
+from typing import Any
 
 import bcc  # type: ignore[import-untyped]
 
@@ -54,6 +55,44 @@ def parse_args() -> argparse.Namespace:
                         help="Seconds before an inactive device is removed. Default: 5")
     return parser.parse_args()
 
+def display_stats(
+    args: argparse.Namespace,
+    known_endpoints: dict[tuple[int, int, int, int, int, int], Any],
+    traffic_data: dict[tuple[int, int, int, int, int, int], int],
+) -> None:
+    sorted_keys = sorted(known_endpoints.keys(), key=lambda k: (k[0], k[1], k[4] & 0x7F, k[4] & 0x80))
+
+    output_lines = []
+    last_bus_key: int | None = None
+    last_device_key = None
+    for key in sorted_keys:
+        k = known_endpoints[key]
+        traffic_bytes = traffic_data.get(key, 0)
+
+        if args.bus in (0, k.busnum):
+            bus_key: int = k.busnum
+            if bus_key != last_bus_key:
+                output_lines.append(f"Bus {bus_key}:")
+                last_bus_key = bus_key
+                last_device_key = None
+
+            device_key = (k.busnum, k.devnum, k.vendor, k.product)
+            if device_key != last_device_key:
+                bus_dev: str = f"{k.busnum:>3}.{k.devnum:<3}"
+                vid_pid: str = f"[{k.vendor:04x}:{k.product:04x}]"
+                output_lines.append(f"  Device {bus_dev} {vid_pid}:")
+                last_device_key = device_key
+
+            rate_bytes_per_sec: float = traffic_bytes / args.interval
+            speed_bits: str = format_speed(rate_bytes_per_sec, use_bits=True)
+            speed_bytes: str = format_speed(rate_bytes_per_sec, use_bits=False)
+            endpoint: str = f"0x{k.endpoint:02x}"
+            ep_type: str = ENDPOINT_TYPES.get(k.type, "UNKN")
+            ep_dir: str = "IN" if (k.endpoint & 0x80) else "OUT"
+            output_lines.append(f"    {endpoint} ({ep_type}, {ep_dir:<3}): {speed_bits:>15} {speed_bytes:>15}")
+
+    print("\033[2J\033[H" + "\n".join(output_lines), flush=True)
+
 def main() -> None:
     args: argparse.Namespace = parse_args()
 
@@ -61,8 +100,8 @@ def main() -> None:
 
     print("Tracing USB transfers... Hit Ctrl-C to end.")
 
-    known_endpoints = {}
-    device_last_seen = {}
+    known_endpoints: dict[tuple[int, int, int, int, int, int], Any] = {}
+    device_last_seen: dict[tuple[int, int, int, int], float] = {}
     try:
         while True:
             time.sleep(args.interval)
@@ -86,38 +125,7 @@ def main() -> None:
                     if (k.busnum, k.devnum, k.vendor, k.product) not in timed_out_devices
                 }
 
-            sorted_keys = sorted(known_endpoints.keys(), key=lambda k: (k[0], k[1], k[4] & 0x7F, k[4] & 0x80))
-
-            output_lines = []
-            last_bus_key: int | None = None
-            last_device_key = None
-            for key in sorted_keys:
-                k = known_endpoints[key]
-                traffic_bytes = traffic_data.get(key, 0)
-
-                if args.bus in (0, k.busnum):
-                    bus_key: int = k.busnum
-                    if bus_key != last_bus_key:
-                        output_lines.append(f"Bus {bus_key}:")
-                        last_bus_key = bus_key
-                        last_device_key = None
-
-                    device_key = (k.busnum, k.devnum, k.vendor, k.product)
-                    if device_key != last_device_key:
-                        bus_dev: str = f"{k.busnum:>3}.{k.devnum:<3}"
-                        vid_pid: str = f"[{k.vendor:04x}:{k.product:04x}]"
-                        output_lines.append(f"  Device {bus_dev} {vid_pid}:")
-                        last_device_key = device_key
-
-                    rate_bytes_per_sec: float = traffic_bytes / args.interval
-                    speed_bits: str = format_speed(rate_bytes_per_sec, use_bits=True)
-                    speed_bytes: str = format_speed(rate_bytes_per_sec, use_bits=False)
-                    endpoint: str = f"0x{k.endpoint:02x}"
-                    ep_type: str = ENDPOINT_TYPES.get(k.type, "UNKN")
-                    ep_dir: str = "IN" if (k.endpoint & 0x80) else "OUT"
-                    output_lines.append(f"    {endpoint} ({ep_type}, {ep_dir:<3}): {speed_bits:>15} {speed_bytes:>15}")
-
-            print("\033[2J\033[H" + "\n".join(output_lines), flush=True)
+            display_stats(args, known_endpoints, traffic_data)
             stats.clear()
     except KeyboardInterrupt:
         print("\nDetaching...")
