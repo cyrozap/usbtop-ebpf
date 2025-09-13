@@ -17,7 +17,7 @@
 
 import argparse
 import time
-from typing import Any
+from typing import NamedTuple
 
 import bcc  # type: ignore[import-untyped]
 
@@ -27,6 +27,29 @@ ENDPOINT_TYPES: dict[int, str] = {
     2: "BULK",
     3: "INTR",
 }
+
+
+class DeviceKey(NamedTuple):
+    """A key representing a single USB device."""
+
+    busnum: int
+    devnum: int
+    vendor: int
+    product: int
+
+class EndpointKey(NamedTuple):
+    """A key representing a single USB endpoint."""
+
+    busnum: int
+    devnum: int
+    vendor: int
+    product: int
+    endpoint: int
+    type: int
+
+    def device_key(self) -> DeviceKey:
+        """Get the device key for this endpoint."""
+        return DeviceKey(busnum=self.busnum, devnum=self.devnum, vendor=self.vendor, product=self.product)
 
 
 def format_speed(value_bytes: float, *, use_bits: bool = False) -> str:
@@ -57,38 +80,37 @@ def parse_args() -> argparse.Namespace:
 
 def display_stats(
     args: argparse.Namespace,
-    known_endpoints: dict[tuple[int, int, int, int, int, int], Any],
-    traffic_data: dict[tuple[int, int, int, int, int, int], int],
+    known_endpoints: set[EndpointKey],
+    traffic_data: dict[EndpointKey, int],
 ) -> None:
-    sorted_keys = sorted(known_endpoints.keys(), key=lambda k: (k[0], k[1], k[4] & 0x7F, k[4] & 0x80))
+    sorted_keys: list[EndpointKey] = sorted(known_endpoints, key=lambda k: (k.busnum, k.devnum, k.endpoint & 0x7F, k.endpoint & 0x80))
 
-    output_lines = []
+    output_lines: list[str] = []
     last_bus_key: int | None = None
-    last_device_key = None
+    last_device_key: DeviceKey | None = None
     for key in sorted_keys:
-        k = known_endpoints[key]
-        traffic_bytes = traffic_data.get(key, 0)
+        traffic_bytes: int = traffic_data.get(key, 0)
 
-        if args.bus in (0, k.busnum):
-            bus_key: int = k.busnum
+        if args.bus in (0, key.busnum):
+            bus_key: int = key.busnum
             if bus_key != last_bus_key:
                 output_lines.append(f"Bus {bus_key}:")
                 last_bus_key = bus_key
                 last_device_key = None
 
-            device_key = (k.busnum, k.devnum, k.vendor, k.product)
+            device_key: DeviceKey = key.device_key()
             if device_key != last_device_key:
-                bus_dev: str = f"{k.busnum:>3}.{k.devnum:<3}"
-                vid_pid: str = f"[{k.vendor:04x}:{k.product:04x}]"
+                bus_dev: str = f"{key.busnum:>3}.{key.devnum:<3}"
+                vid_pid: str = f"[{key.vendor:04x}:{key.product:04x}]"
                 output_lines.append(f"  Device {bus_dev} {vid_pid}:")
                 last_device_key = device_key
 
             rate_bytes_per_sec: float = traffic_bytes / args.interval
             speed_bits: str = format_speed(rate_bytes_per_sec, use_bits=True)
             speed_bytes: str = format_speed(rate_bytes_per_sec, use_bits=False)
-            endpoint: str = f"0x{k.endpoint:02x}"
-            ep_type: str = ENDPOINT_TYPES.get(k.type, "UNKN")
-            ep_dir: str = "IN" if (k.endpoint & 0x80) else "OUT"
+            endpoint: str = f"0x{key.endpoint:02x}"
+            ep_type: str = ENDPOINT_TYPES.get(key.type, "UNKN")
+            ep_dir: str = "IN" if (key.endpoint & 0x80) else "OUT"
             output_lines.append(f"    {endpoint} ({ep_type}, {ep_dir:<3}): {speed_bits:>15} {speed_bytes:>15}")
 
     print("\033[2J\033[H" + "\n".join(output_lines), flush=True)
@@ -100,29 +122,29 @@ def main() -> None:
 
     print("Tracing USB transfers... Hit Ctrl-C to end.")
 
-    known_endpoints: dict[tuple[int, int, int, int, int, int], Any] = {}
-    device_last_seen: dict[tuple[int, int, int, int], float] = {}
+    known_endpoints: set[EndpointKey] = set()
+    device_last_seen: dict[DeviceKey, float] = {}
     try:
         while True:
             time.sleep(args.interval)
 
             stats: bcc.table.Table = b.get_table("stats")
-            traffic_data = {}
+            traffic_data: dict[EndpointKey, int] = {}
             now: float = time.monotonic()
             for k, v in stats.items():
-                key = (k.busnum, k.devnum, k.vendor, k.product, k.endpoint, k.type)
-                known_endpoints[key] = k
+                key: EndpointKey = EndpointKey(busnum=k.busnum, devnum=k.devnum, vendor=k.vendor, product=k.product, endpoint=k.endpoint, type=k.type)
+                known_endpoints.add(key)
                 traffic_data[key] = v.value
-                device_key = (k.busnum, k.devnum, k.vendor, k.product)
+                device_key: DeviceKey = key.device_key()
                 device_last_seen[device_key] = now
 
-            timed_out_devices = {dev_key for dev_key, ts in device_last_seen.items() if now - ts > args.timeout}
+            timed_out_devices: set[DeviceKey] = {dev_key for dev_key, ts in device_last_seen.items() if now - ts > args.timeout}
 
             if timed_out_devices:
                 device_last_seen = {dev_key: ts for dev_key, ts in device_last_seen.items() if dev_key not in timed_out_devices}
                 known_endpoints = {
-                    ep_key: k for ep_key, k in known_endpoints.items()
-                    if (k.busnum, k.devnum, k.vendor, k.product) not in timed_out_devices
+                    ep_key for ep_key in known_endpoints
+                    if ep_key.device_key() not in timed_out_devices
                 }
 
             display_stats(args, known_endpoints, traffic_data)
