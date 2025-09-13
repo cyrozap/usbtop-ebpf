@@ -48,20 +48,48 @@ class EndpointKey(NamedTuple):
     type: int
 
     def device_key(self) -> DeviceKey:
-        """Get the device key for this endpoint."""
+        """
+        Get the device key for this endpoint.
+
+        Returns:
+            The device key for this endpoint.
+
+        """
         return DeviceKey(busnum=self.busnum, devnum=self.devnum, vendor=self.vendor, product=self.product)
 
     def number(self) -> int:
-        """Get the endpoint number."""
+        """
+        Get the endpoint number.
+
+        Returns:
+            The endpoint number.
+
+        """
         return self.endpoint & 0x7F
 
     def is_in(self) -> bool:
-        """Get the endpoint direction (True for IN, False for OUT)."""
+        """
+        Get the endpoint direction.
+
+        Returns:
+            True if the endpoint is an IN endpoint, False otherwise.
+
+        """
         return (self.endpoint & 0x80) != 0
 
 
 def format_speed(value_bytes: float, *, use_bits: bool = False) -> str:
-    """Format a speed in bytes/sec into a human-readable string."""
+    """
+    Format a speed in bytes/sec into a human-readable string.
+
+    Args:
+        value_bytes: The speed in bytes per second.
+        use_bits: If True, format as bits per second instead.
+
+    Returns:
+        A human-readable string representing the speed.
+
+    """
     speed: float = value_bytes
     units: list[str] = ["B/s", "KiB/s", "MiB/s", "GiB/s", "TiB/s"]
     divisor: float = 1024.0
@@ -78,7 +106,13 @@ def format_speed(value_bytes: float, *, use_bits: bool = False) -> str:
     return f"{speed:.2f} {units[unit_index]}"
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments."""
+    """
+    Parse command-line arguments.
+
+    Returns:
+        The parsed command-line arguments.
+
+    """
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument("-b", "--bus", type=int, default=0,
                         help="The bus to measure traffic on. Default: 0 (all buses)")
@@ -93,7 +127,15 @@ def display_stats(
     known_endpoints: set[EndpointKey],
     traffic_data: dict[EndpointKey, int],
 ) -> None:
-    """Display the USB traffic statistics."""
+    """
+    Display the USB traffic statistics.
+
+    Args:
+        args: The command-line arguments.
+        known_endpoints: A set of all known endpoints.
+        traffic_data: A dictionary mapping endpoints to traffic in bytes.
+
+    """
     sorted_keys: list[EndpointKey] = sorted(known_endpoints, key=lambda k: (k.busnum, k.devnum, k.number(), k.is_in()))
 
     output_lines: list[str] = []
