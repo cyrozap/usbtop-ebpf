@@ -61,6 +61,7 @@ class EndpointKey(NamedTuple):
 
 
 def format_speed(value_bytes: float, *, use_bits: bool = False) -> str:
+    """Format a speed in bytes/sec into a human-readable string."""
     speed: float = value_bytes
     units: list[str] = ["B/s", "KiB/s", "MiB/s", "GiB/s", "TiB/s"]
     divisor: float = 1024.0
@@ -77,6 +78,7 @@ def format_speed(value_bytes: float, *, use_bits: bool = False) -> str:
     return f"{speed:.2f} {units[unit_index]}"
 
 def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
     parser: argparse.ArgumentParser = argparse.ArgumentParser()
     parser.add_argument("-b", "--bus", type=int, default=0,
                         help="The bus to measure traffic on. Default: 0 (all buses)")
@@ -91,6 +93,7 @@ def display_stats(
     known_endpoints: set[EndpointKey],
     traffic_data: dict[EndpointKey, int],
 ) -> None:
+    """Display the USB traffic statistics."""
     sorted_keys: list[EndpointKey] = sorted(known_endpoints, key=lambda k: (k.busnum, k.devnum, k.number(), k.is_in()))
 
     output_lines: list[str] = []
@@ -124,6 +127,7 @@ def display_stats(
     print("\033[2J\033[H" + "\n".join(output_lines), flush=True)
 
 def main() -> None:
+    """Run the usbtop tool."""
     args: argparse.Namespace = parse_args()
 
     b: bcc.BPF = bcc.BPF(src_file="perf.c")
