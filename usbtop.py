@@ -51,6 +51,14 @@ class EndpointKey(NamedTuple):
         """Get the device key for this endpoint."""
         return DeviceKey(busnum=self.busnum, devnum=self.devnum, vendor=self.vendor, product=self.product)
 
+    def number(self) -> int:
+        """Get the endpoint number."""
+        return self.endpoint & 0x7F
+
+    def is_in(self) -> bool:
+        """Get the endpoint direction (True for IN, False for OUT)."""
+        return (self.endpoint & 0x80) != 0
+
 
 def format_speed(value_bytes: float, *, use_bits: bool = False) -> str:
     speed: float = value_bytes
@@ -83,7 +91,7 @@ def display_stats(
     known_endpoints: set[EndpointKey],
     traffic_data: dict[EndpointKey, int],
 ) -> None:
-    sorted_keys: list[EndpointKey] = sorted(known_endpoints, key=lambda k: (k.busnum, k.devnum, k.endpoint & 0x7F, k.endpoint & 0x80))
+    sorted_keys: list[EndpointKey] = sorted(known_endpoints, key=lambda k: (k.busnum, k.devnum, k.number(), k.is_in()))
 
     output_lines: list[str] = []
     last_bus_key: int | None = None
@@ -110,7 +118,7 @@ def display_stats(
             speed_bytes: str = format_speed(rate_bytes_per_sec, use_bits=False)
             endpoint: str = f"0x{key.endpoint:02x}"
             ep_type: str = ENDPOINT_TYPES.get(key.type, "UNKN")
-            ep_dir: str = "IN" if (key.endpoint & 0x80) else "OUT"
+            ep_dir: str = "IN" if key.is_in() else "OUT"
             output_lines.append(f"    {endpoint} ({ep_type}, {ep_dir:<3}): {speed_bits:>15} {speed_bytes:>15}")
 
     print("\033[2J\033[H" + "\n".join(output_lines), flush=True)
