@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "usbtop"
 version = "0.1.0"
 description = "A top-like tool for monitoring USB traffic."
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     # Please note that this project requires the Python bcc bindings: https://github.com/iovisor/bcc
 ]
