@@ -5,6 +5,22 @@ A top-like tool for monitoring USB traffic using [eBPF][eBPF], inspired by [usbt
 Unlike [usbtop][usbtop], which captures packets from [usbmon][usbmon] and performs bus traffic calculations on URBs at the userspace level, this program uses an [eBPF][eBPF] [kprobe][kprobe] to collect USB traffic stats directly from [URBs][URB] in the kernel.
 
 
+## Example output
+
+Below is an example of the output from `usbtop.py`, showing a very fast read from a USB SSD connected to a 5 Gbps port and a much slower read from an RTL-SDR dongle.
+
+```
+Bus 6:
+  Device   6.12  [0bda:9210]:
+    0x81 (BULK, IN ):       3.38 Gbps    402.55 MiB/s
+    0x83 (BULK, IN ):     104.88 Kbps     12.80 KiB/s
+    0x04 (BULK, OUT):     209.77 Kbps     25.61 KiB/s
+Bus 9:
+  Device   9.30  [0bda:2838]:
+    0x81 (BULK, IN ):       4.19 Mbps    512.00 KiB/s
+```
+
+
 ## Quick start
 
 
